@@ -1,0 +1,49 @@
+#!/bin/bash
+
+echo "=== Диагностика процессов ==="
+echo "Дата: $(date)"
+echo "Пользователь: $USER"
+echo ""
+
+echo "1. Процессы пользователя $USER:"
+echo "-----------------------------"
+ps -u $USER
+echo ""
+
+echo "2. Процесс с максимальным CPU (top -bn1):"
+echo "-----------------------------"
+top -bn1
+echo ""
+
+echo "3. Карта памяти для текущего процесса:"
+echo "-----------------------------"
+MY_PID=$$
+echo "Текущий PID: $MY_PID"
+if [ -f "/proc/$MY_PID/maps" ]; then
+    echo "Первые 20 строк из /proc/$MY_PID/maps:"
+    head -20 "/proc/$MY_PID/maps"
+else
+    echo "Файл /proc/$MY_PID/maps не найден"
+fi
+echo ""
+
+echo "4. Сохраняю отчет в report.txt..."
+{
+    echo "=== ОТЧЕТ ПО ДИАГНОСТИКЕ ==="
+    echo "Дата: $(date)"
+    echo "Пользователь: $USER"
+    echo ""
+    echo "=== 1. ПРОЦЕССЫ ПОЛЬЗОВАТЕЛЯ ==="
+    ps -u $USER
+    echo ""
+    echo "=== 2. TOP ВЫВОД ==="
+    top -bn1
+    echo ""
+    echo "=== 3. КАРТА ПАМЯТИ (PID=$MY_PID) ==="
+    if [ -f "/proc/$MY_PID/maps" ]; then
+        cat "/proc/$MY_PID/maps"
+    fi
+} > report.txt
+
+echo "Отчет сохранен в report.txt"
+echo "Диагностика завершена!"

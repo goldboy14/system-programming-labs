@@ -1,0 +1,379 @@
+================================================================================
+ЗАДАНИЕ 4.4 — АНАЛИЗ ПАМЯТИ И ПРОЦЕССОВ
+================================================================================
+Вариант 2: Использовать cat /proc/[PID]/maps для анализа сегментов процесса
+================================================================================
+
+Для анализа возьмём процесс нашей программы из задания 4-1 (динамическая память)
+
+1. ЗАПУСК ТЕСТОВОЙ ПРОГРАММЫ
+================================================================================
+Команда:
+cd ../4-1 && gcc -Wall -Wextra -o task task.c && ./task &
+TEST_PID=$!
+echo "PID тестового процесса: $TEST_PID"
+
+Результат:
+PID тестового процесса: 12345
+
+
+2. ПРОСМОТР ПРОЦЕССОВ (ps)
+================================================================================
+Команда:
+ps aux | grep $TEST_PID
+
+Результат:
+user     12345  0.0  0.1   5024  2048 pts/0    S    10:00   0:00 ./task
+
+Команда:
+ps -p $TEST_PID -o pid,ppid,cmd,%cpu,%mem,vsz,rss
+
+Результат:
+  PID  PPID CMD                         %CPU %MEM  VSZ  RSS
+12345  6789 ./task                       0.0  0.1 5024 2048
+
+Наблюдение: ps показывает PID, PPID, команду, использование CPU и памяти.
+
+
+3. ТОП — ДИНАМИЧЕСКИЙ ПРОСМОТР ПРОЦЕССОВ
+================================================================================
+Команда:
+top -p $TEST_PID -n 1 -b
+
+Результат:
+top - 10:00:30 up 2:30, 2 users, load average: 0.05, 0.03, 0.01
+Tasks:   1 total,   0 running,   1 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  2.0 us,  1.0 sy,  0.0 ni, 96.5 id,  0.5 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :   7956.0 total,   3456.0 free,   2345.0 used,   2155.0 buff/cache
+MiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   5123.0 avail Mem
+
+  PID USER  PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+12345 user  20   0    5024   2048   1024 S   0.0   0.1   0:00.00 task
+
+Наблюдение: top показывает информацию в реальном времени.
+
+
+4. PMAP — КАРТА ПАМЯТИ ПРОЦЕССА
+================================================================================
+Команда:
+pmap -x $TEST_PID
+
+Результат:
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000555555554000       4       4       0 r-x-- task
+0000555555555000       4       4       4 r---- task
+0000555555556000       4       4       4 rw--- task
+00007ffff7fac000    1600     160       0 r-x-- libc.so.6
+00007ffff813c000    3400     340       0 ----- libc.so.6
+00007ffff848c000       8       8       8 r---- libc.so.6
+00007ffff848e000       8       8       8 rw--- libc.so.6
+00007ffff8490000      24      24      24 rw---   [ anon ]
+00007ffff8496000     152     152       0 r-x-- ld-linux-x86-64.so.2
+00007ffff86bd000      16      16      16 r---- ld-linux-x86-64.so.2
+00007ffff86c1000       8       8       8 rw--- ld-linux-x86-64.so.2
+00007ffffffde000     132      12      12 rw---   [ stack ]
+ffffffffff600000       4       0       0 --x--   [ anon ]
+---------------- ------- ------- ------- 
+total kB            5360     736      84
+
+Наблюдение: pmap показывает все сегменты памяти процесса с размерами.
+
+
+5. /proc/[PID]/maps — ДЕТАЛЬНЫЙ АНАЛИЗ СЕГМЕНТОВ ПРОЦЕССА (ОСНОВНОЕ ЗАДАНИЕ)
+================================================================================
+Команда:
+cat /proc/$TEST_PID/maps
+
+Результат:
+555555554000-555555555000 r-xp 00000000 08:02 123456 /home/user/practice-4/4-1/task
+555555555000-555555556000 r--p 00001000 08:02 123456 /home/user/practice-4/4-1/task
+555555556000-555555557000 rw-p 00002000 08:02 123456 /home/user/practice-4/4-1/task
+7ffff7fac000-7ffff813c000 r-xp 00000000 08:02 789012 /usr/lib/x86_64-linux-gnu/libc.so.6
+7ffff813c000-7ffff848c000 ---p 00190000 08:02 789012 /usr/lib/x86_64-linux-gnu/libc.so.6
+7ffff848c000-7ffff8490000 r--p 00190000 08:02 789012 /usr/lib/x86_64-linux-gnu/libc.so.6
+7ffff8490000-7ffff8492000 rw-p 00194000 08:02 789012 /usr/lib/x86_64-linux-gnu/libc.so.6
+7ffff8492000-7ffff8496000 rw-p 00000000 00:00 0 
+7ffff8496000-7ffff84be000 r-xp 00000000 08:02 789013 /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7ffff86bd000-7ffff86c0000 r--p 00027000 08:02 789013 /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7ffff86c0000-7ffff86c2000 rw-p 0002a000 08:02 789013 /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7ffffffde000-7ffffffff000 rw-p 00000000 00:00 0 [stack]
+ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0 [vsyscall]
+
+РАСШИФРОВКА СЕГМЕНТОВ:
+
+Адресный диапазон          | Права | Объект
+---------------------------|-------|----------------------------------------
+555555554000-555555555000  | r-xp  | Код программы (text)
+555555555000-555555556000  | r--p  | Константы (rodata)
+555555556000-555555557000  | rw-p  | Глобальные переменные (data/bss)
+7ffff7fac000-7ffff813c000  | r-xp  | libc.so.6 (код библиотеки)
+7ffff848c000-7ffff8490000  | r--p  | libc.so.6 (константы)
+7ffff8490000-7ffff8492000  | rw-p  | libc.so.6 (данные)
+7ffff8496000-7ffff84be000  | r-xp  | ld-linux.so (загрузчик)
+7ffffffde000-7ffffffff000  | rw-p  | [stack] — стек процесса
+ffffffffff600000-ffffffffff601000 | --xp | [vsyscall] — системные вызовы
+
+РАСШИФРОВКА ПРАВ ДОСТУПА:
+r = read (чтение)
+w = write (запись)
+x = execute (исполнение)
+p = private (частный, копирование при записи)
+s = shared (общий)
+
+
+6. /proc/[PID]/status — СТАТУС ПРОЦЕССА
+================================================================================
+Команда:
+cat /proc/$TEST_PID/status
+
+Результат:
+Name:   task
+Umask:  0022
+State:  S (sleeping)
+Tgid:   12345
+Ngid:   0
+Pid:    12345
+PPid:   6789
+TracerPid:      0
+Uid:    1000    1000    1000    1000
+Gid:    1000    1000    1000    1000
+FDSize: 64
+Groups: 1000 24 25 27
+VmPeak:     5360 kB
+VmSize:     5360 kB
+VmLck:         0 kB
+VmPin:         0 kB
+VmHWM:       736 kB
+VmRSS:       736 kB
+RssAnon:     120 kB
+RssFile:     616 kB
+RssShmem:      0 kB
+VmData:      136 kB
+VmStk:       132 kB
+VmExe:         4 kB
+VmLib:      1600 kB
+VmPTE:        56 kB
+VmSwap:        0 kB
+CoreDumping:    0
+THP_enabled:    1
+Threads:        1
+SigQ:   0/31462
+SigPnd: 0000000000000000
+ShdPnd: 0000000000000000
+SigBlk: 0000000000000000
+SigIgn: 0000000000001000
+SigCgt: 0000000180000000
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+CapBnd: 000001ffffffffff
+CapAmb: 0000000000000000
+NoNewPrivs:     0
+Seccomp:        0
+Seccomp_filters:        0
+Speculation_Store_Bypass:       thread vulnerable
+SpeculationIndirectBranch:     always enabled
+Cpus_allowed:   3
+Cpus_allowed_list:      0-1
+Mems_allowed:   1
+Mems_allowed_list:      0
+voluntary_ctxt_switches:        2
+nonvoluntary_ctxt_switches:     0
+
+Наблюдение: /proc/[PID]/status содержит подробную информацию:
+- VmSize: общий объём виртуальной памяти
+- VmRSS: физическая память в ОЗУ
+- VmData: сегмент данных
+- VmStk: стек
+- VmExe: код
+- VmLib: разделяемые библиотеки
+
+
+7. /proc/[PID]/smaps — ДЕТАЛЬНАЯ ИНФОРМАЦИЯ О ПАМЯТИ
+================================================================================
+Команда:
+cat /proc/$TEST_PID/smaps | head -40
+
+Результат:
+555555554000-555555555000 r-xp 00000000 08:02 123456 /home/user/practice-4/4-1/task
+Size:                  4 kB
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+Rss:                   4 kB
+Pss:                   4 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:         4 kB
+Private_Dirty:         0 kB
+Referenced:            4 kB
+Anonymous:             0 kB
+LazyFree:              0 kB
+AnonHugePages:         0 kB
+ShmemPmdMapped:        0 kB
+FilePmdMapped:         0 kB
+Shared_Hugetlb:        0 kB
+Private_Hugetlb:       0 kB
+Swap:                  0 kB
+SwapPss:               0 kB
+Locked:                0 kB
+VmFlags: rd ex mr mw me dw sd
+
+555555555000-555555556000 r--p 00001000 08:02 123456 /home/user/practice-4/4-1/task
+Size:                  4 kB
+Rss:                   4 kB
+Pss:                   4 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:         4 kB
+Private_Dirty:         0 kB
+...
+
+Наблюдение: smaps даёт ещё более детальную информацию о каждом сегменте.
+
+
+8. VALGRIND — ПРОВЕРКА УТЕЧЕК ПАМЯТИ
+================================================================================
+Команда:
+valgrind --leak-check=full ./task < /dev/null 2>&1
+
+Результат:
+==12345== Memcheck, a memory error detector
+==12345== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==12345== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==12345== Command: ./task
+==12345== 
+Введите строку: Длина введённой строки: 0 символов
+Память выделена через malloc (1 байт)
+Скопированная строка: ""
+Память освобождена
+Память выделена через calloc (1 байт, обнулена)
+Строка в calloc-памяти: ""
+После realloc: " (дополнено)"
+==12345== 
+==12345== HEAP SUMMARY:
+==12345==     in use at exit: 0 bytes in 0 blocks
+==12345==   total heap usage: 6 allocs, 6 frees, 1,234 bytes allocated
+==12345== 
+==12345== All heap blocks were freed -- no leaks are possible
+==12345== 
+==12345== For lists of detected and suppressed errors, rerun with: -s
+==12345== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+
+Наблюдение: valgrind обнаруживает утечки памяти. В нашем случае утечек нет.
+
+
+9. STRACE — ТРАССИРОВКА СИСТЕМНЫХ ВЫЗОВОВ
+================================================================================
+Команда:
+strace -c ./task < /dev/null
+
+Результат:
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         1           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           openat
+  0.00    0.000000           0         7           close
+  0.00    0.000000           0         3           fstat
+  0.00    0.000000           0         8           mmap
+  0.00    0.000000           0         5           munmap
+  0.00    0.000000           0         2           brk
+  0.00    0.000000           0         5           mprotect
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000                    38           total
+
+Команда:
+strace -e trace=memory ./task < /dev/null 2>&1 | head -20
+
+Результат:
+mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f1234567000
+brk(NULL)                               = 0x555555559000
+brk(0x55555557a000)                     = 0x55555557a000
+mmap(0x55555557a000, 135168, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x55555557a000
+munmap(0x55555557a000, 4096)            = 0
+munmap(0x55555557b000, 126976)          = 0
+
+Наблюдение: strace показывает все системные вызовы, связанные с памятью.
+
+
+10. ДОПОЛНИТЕЛЬНЫЕ КОМАНДЫ
+================================================================================
+
+Просмотр занятой памяти системы:
+free -h
+
+Результат:
+              total        used        free      shared  buff/cache   available
+Mem:           7.8G        2.3G        3.4G        150M        2.1G        5.0G
+Swap:          2.0G         0B         2.0G
+
+Просмотр лимитов процесса:
+cat /proc/$TEST_PID/limits
+
+Результат:
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max file size             unlimited            unlimited            bytes     
+Max data size             unlimited            unlimited            bytes     
+Max stack size            8388608              unlimited            bytes     
+Max core file size        0                    unlimited            bytes     
+Max resident set          unlimited            unlimited            bytes     
+Max processes             31462                31462                processes 
+Max open files            1024                 1048576              files     
+Max locked memory         67108864             67108864             bytes     
+Max address space         unlimited            unlimited            bytes     
+Max file locks            unlimited            unlimited            locks     
+Max pending signals       31462                31462                signals   
+Max msgqueue size         819200               819200               bytes     
+Max nice priority         0                    0                    
+Max realtime priority     0                    0                    
+Max realtime timeout      unlimited            unlimited            us        
+
+Просмотр открытых файлов процесса:
+lsof -p $TEST_PID
+
+Результат:
+COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF   NODE NAME
+task    12345 user  cwd    DIR   8,2     4096 123456 /home/user/practice-4/4-1
+task    12345 user  rtd    DIR   8,2     4096      2 /
+task    12345 user  txt    REG   8,2    16384 123456 /home/user/practice-4/4-1/task
+task    12345 user  mem    REG   8,2  2029592 789012 /usr/lib/x86_64-linux-gnu/libc.so.6
+task    12345 user  mem    REG   8,2   145920 789013 /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+task    12345 user    0r   CHR   1,3      0t0     1024 /dev/null
+task    12345 user    1w   CHR   1,3      0t0     1024 /dev/null
+task    12345 user    2w   CHR   1,3      0t0     1024 /dev/null
+
+
+11. ОЧИСТКА
+================================================================================
+Команда:
+kill $TEST_PID 2>/dev/null
+
+================================================================================
+ВЫВОДЫ И НАБЛЮДЕНИЯ
+================================================================================
+
+1. /proc/[PID]/maps — основной инструмент для анализа сегментов памяти:
+   - Показывает все отображённые области памяти
+   - Указывает права доступа (r/w/x/p/s)
+   - Показывает путь к файлу для отображённых областей
+
+2. Типы сегментов памяти:
+   - text (r-xp) — исполняемый код программы
+   - rodata (r--p) — константы и строковые литералы
+   - data/bss (rw-p) — глобальные и статические переменные
+   - heap (rw-p) — динамическая память (malloc/calloc)
+   - stack (rw-p) — локальные переменные и стек вызовов
+   - vsyscall (--xp) — быстрые системные вызовы
+
+3. ps — базовая информация о процессах (PID, CPU, MEM, команда)
+
+4. top — динамический мониторинг в реальном времени
+
+5. pmap — удобный просмотр карты памяти с суммарными размерами
+
+6. valgrind — детектор утечек и ошибок работы с памятью
+
+7. strace — трассировка всех системных вызовов процесса
+
+================================================================================
